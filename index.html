@@ -1,84 +1,241 @@
-import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round Robin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+body{margin:0;font-family:Inter,sans-serif;background:#F5F6F8;color:#12151C}
+h1,h2,.brand,.big{font-family:"Space Grotesk",sans-serif}
+h2{margin:0;font-size:22px}
+th{text-align:left;font-size:13px;font-weight:500;color:#5B6270;padding:10px 12px;border-bottom:1px solid #E3E6EB;white-space:nowrap}
+td{padding:12px;font-size:15px;border-bottom:1px solid #EEF0F3;white-space:nowrap}
+table{border-collapse:collapse;width:100%}
+input{height:44px;box-sizing:border-box;width:88px;padding:0 12px;border:1px solid #C9CED6;border-radius:8px;font:inherit;font-size:15px;color:#12151C;background:#fff}
+input:focus-visible,button:focus-visible{outline:3px solid #9DB4FF;outline-offset:1px}
+button{font:inherit;cursor:pointer}
+.ico{width:44px;height:44px;border:0;background:transparent;border-radius:8px;color:#5B6270}
+.ico:hover{background:#EEF0F3}
+.card{background:#fff;border:1px solid #E3E6EB;border-radius:14px;padding:24px}
+.btn{min-height:48px;padding:0 20px;border-radius:10px;font-size:16px}
+.primary{border:0;background:#2B59FF;color:#fff;font-weight:600;padding:0 24px}
+.primary:hover{background:#1F47D6}
+.secondary{border:1px solid #C9CED6;background:#fff;color:#12151C}
+.ghost{border:0;background:transparent;color:#5B6270;padding:0 12px}
+.stat{flex:1 1 180px}
+.stat .name{font-size:14px;color:#5B6270}
+.stat .big{font-size:40px;font-weight:700;line-height:1.2;margin-top:6px}
+.stat .hint{font-size:13px;color:#5B6270;margin-top:2px}
+.seg{height:56px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;border-right:2px solid #fff;box-sizing:border-box;color:#fff;min-width:0}
+.tick{display:flex;justify-content:space-between;font-size:13px;color:#5B6270;padding-top:6px;min-width:0}
+.dot{display:inline-block;width:12px;height:12px;border-radius:3px}
+</style>
+</head>
+<body>
+<header style="background:#fff;border-bottom:1px solid #E3E6EB">
+<div style="max-width:1200px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+<div class="brand" style="display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px">
+<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#2B59FF" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="14" cy="14" r="11"/><path d="M14 7v7l5 3"/></svg>
+CPU Scheduler</div>
+<span style="font-size:14px;color:#5B6270">Планирование процессов · Round Robin</span>
+</div>
+</header>
 
+<main style="max-width:1200px;margin:0 auto;padding:40px 24px 56px">
+<h1 style="margin:0;font-size:44px;line-height:1.1;font-weight:700">Round Robin</h1>
+<p style="margin:12px 0 32px;max-width:640px;font-size:17px;line-height:1.55;color:#5B6270">Каждый процесс получает процессор на один квант времени. Если он не успел завершиться, то встаёт в конец очереди и ждёт следующего круга.</p>
 
-def get_arrival(p):
-    return p["arrival"]
+<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
 
+<section class="card" style="flex:1 1 360px;max-width:440px">
+<h2 style="margin-bottom:16px">Входные данные</h2>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+<label for="q" style="font-size:15px;font-weight:500">Квант времени (q)</label>
+<input id="q" type="number" min="1" value="2" style="width:80px">
+</div>
+<div style="overflow-x:auto">
+<table><thead><tr><th>Процесс</th><th>Прибытие</th><th>Burst</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+</div>
+<button id="addBtn" type="button" style="margin-top:12px;min-height:44px;padding:0 14px;border:1px dashed #9AA1AD;border-radius:8px;background:#fff;color:#12151C;font-size:15px">+ Добавить процесс</button>
+<p id="error" role="alert" style="margin:16px 0 0;font-size:15px;color:#B3261E"></p>
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+<button id="calcBtn" type="button" class="btn primary">Рассчитать</button>
+<button id="exampleBtn" type="button" class="btn secondary">Пример</button>
+<button id="resetBtn" type="button" class="btn ghost">Сбросить</button>
+</div>
+</section>
 
-def round_robin(quantum, procs):
-    procs.sort(key=get_arrival)
-    for p in procs:
-        p["left"] = p["burst"]     
-        p["first"] = None           
-        p["added"] = False         
+<section style="flex:3 1 520px;min-width:0;display:flex;flex-direction:column;gap:24px">
+<div id="empty" class="card" style="font-size:16px;color:#5B6270">Введите процессы и нажмите «Рассчитать».</div>
+<div id="results" style="display:none;flex-direction:column;gap:24px">
+<div style="display:flex;gap:16px;flex-wrap:wrap">
+<div class="card stat"><div class="name">Среднее время оборота</div><div class="big" id="avgT"></div><div class="hint">turnaround</div></div>
+<div class="card stat"><div class="name">Среднее время ожидания</div><div class="big" id="avgW"></div><div class="hint">waiting</div></div>
+<div class="card stat"><div class="name">Среднее время отклика</div><div class="big" id="avgR"></div><div class="hint">response</div></div>
+</div>
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+<h2>Диаграмма Ганта</h2>
+<div id="legend" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px"></div>
+</div>
+<div style="overflow-x:auto"><div id="gantt"></div></div>
+</div>
+<div class="card">
+<h2 style="margin-bottom:12px">Метрики по процессам</h2>
+<div style="overflow-x:auto">
+<table><thead><tr><th>Процесс</th><th>Прибытие</th><th>Burst</th><th>Первый запуск</th><th>Завершение</th><th>Оборот</th><th>Ожидание</th><th>Отклик</th></tr></thead><tbody id="metrics"></tbody></table>
+</div>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#5B6270">Оборот = завершение − прибытие. Ожидание = оборот − burst. Отклик = первый запуск − прибытие.</p>
+</div>
+</div>
+</section>
 
-    time = 0
-    queue = []
-    gantt = []
-    finished = 0
-    current = None                 
+</div>
+</main>
 
-    while finished < len(procs):
-        for p in procs:            
-            if p["arrival"] <= time and not p["added"]:
-                queue.append(p)
-                p["added"] = True
+<script>
+// Цвета процессов (белый текст на них читается хорошо)
+const COLORS = ["#2B59FF", "#0B7A5F", "#B4531A", "#7A3FD1", "#B0245B", "#00758F", "#5E6B00", "#475569"];
+// Если страницу открыли как файл, обращаемся к локальному серверу
+const API = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+const EXAMPLE = [["P1", 0, 5], ["P2", 1, 3], ["P3", 2, 8], ["P4", 3, 6]];
 
-        if current and current["left"] > 0:
-            queue.append(current)   
+const rowsEl = document.getElementById("rows");
+const errorEl = document.getElementById("error");
 
-        if not queue:              
-            time += 1
-            continue
+// Защита от вставки html из полей ввода
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
 
-        current = queue.pop(0)
-        if current["first"] is None:
-            current["first"] = time
-        run = min(quantum, current["left"])
-        gantt.append({"pid": current["pid"], "start": time, "end": time + run})
-        time += run
-        current["left"] -= run
-        if current["left"] == 0:
-            current["end"] = time
-            finished += 1
+function addRow(pid, arrival, burst) {
+  const tr = document.createElement("tr");
+  tr.innerHTML =
+    '<td><input class="pid" aria-label="Имя процесса" value="' + esc(pid) + '" style="width:64px"></td>' +
+    '<td><input class="arr" type="number" min="0" aria-label="Прибытие" value="' + arrival + '"></td>' +
+    '<td><input class="bur" type="number" min="1" aria-label="Длительность" value="' + burst + '"></td>' +
+    '<td><button type="button" class="ico" aria-label="Удалить процесс"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></td>';
+  tr.querySelector("button").addEventListener("click", function () { tr.remove(); });
+  rowsEl.appendChild(tr);
+}
 
-    metrics = []
-    total = {"turnaround": 0, "waiting": 0, "response": 0}
-    for p in procs:
-        t = p["end"] - p["arrival"]
-        w = t - p["burst"]
-        r = p["first"] - p["arrival"]
-        metrics.append({"pid": p["pid"], "arrival": p["arrival"], "burst": p["burst"],
-                        "first": p["first"], "completion": p["end"],
-                        "turnaround": t, "waiting": w, "response": r})
-        total["turnaround"] += t
-        total["waiting"] += w
-        total["response"] += r
+function loadExample() {
+  rowsEl.innerHTML = "";
+  document.getElementById("q").value = 2;
+  EXAMPLE.forEach(function (p) { addRow(p[0], p[1], p[2]); });
+  showError("");
+}
 
-    avg = {}
-    for name in total:
-        avg[name] = round(total[name] / len(procs), 2)
-    return {"gantt": gantt, "metrics": metrics, "avg": avg}
+function resetAll() {
+  rowsEl.innerHTML = "";
+  document.getElementById("q").value = 2;
+  document.getElementById("results").style.display = "none";
+  document.getElementById("empty").style.display = "block";
+  showError("");
+}
 
+function showError(text) { errorEl.textContent = text; }
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):               # отдаём страницу
-        page = open("static/index.html", "rb").read()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(page)
+// Собираем данные из формы и проверяем их
+function collect() {
+  const quantum = Number(document.getElementById("q").value);
+  if (!Number.isInteger(quantum) || quantum < 1) return { error: "Квант времени должен быть целым числом от 1." };
 
-    def do_POST(self):              # считаем расписание
-        size = int(self.headers["Content-Length"])
-        data = json.loads(self.rfile.read(size))
-        result = round_robin(data["quantum"], data["processes"])
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps(result).encode())
+  const processes = [];
+  const seen = new Set();
+  for (const tr of rowsEl.children) {
+    const pid = tr.querySelector(".pid").value.trim();
+    const arrival = Number(tr.querySelector(".arr").value);
+    const burst = Number(tr.querySelector(".bur").value);
+    if (!pid) return { error: "У каждого процесса должно быть имя." };
+    if (seen.has(pid)) return { error: "Имя «" + pid + "» повторяется." };
+    if (!Number.isInteger(arrival) || arrival < 0) return { error: "Прибытие у " + pid + " должно быть целым числом от 0." };
+    if (!Number.isInteger(burst) || burst < 1) return { error: "Burst у " + pid + " должен быть целым числом от 1." };
+    seen.add(pid);
+    processes.push({ pid: pid, arrival: arrival, burst: burst });
+  }
+  if (processes.length === 0) return { error: "Добавьте хотя бы один процесс." };
+  return { quantum: quantum, processes: processes };
+}
 
+async function calculate() {
+  const input = collect();
+  if (input.error) { showError(input.error); return; }
+  showError("");
+  try {
+    const res = await fetch(API + "/api/round-robin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    });
+    if (!res.ok) throw new Error("bad response");
+    render(await res.json());
+  } catch (e) {
+    showError("Не удалось получить ответ от сервера. Он запущен?");
+  }
+}
 
-print("Сайт: http://127.0.0.1:8000")
-HTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
+function render(data) {
+  document.getElementById("empty").style.display = "none";
+  document.getElementById("results").style.display = "flex";
+
+  document.getElementById("avgT").textContent = data.avg.turnaround.toFixed(2);
+  document.getElementById("avgW").textContent = data.avg.waiting.toFixed(2);
+  document.getElementById("avgR").textContent = data.avg.response.toFixed(2);
+
+  // Каждому процессу свой цвет
+  const color = {};
+  data.metrics.forEach(function (m, i) { color[m.pid] = COLORS[i % COLORS.length]; });
+
+  document.getElementById("legend").innerHTML = data.metrics.map(function (m) {
+    return '<span style="display:inline-flex;align-items:center;gap:8px"><span class="dot" style="background:' + color[m.pid] + '"></span>' + esc(m.pid) + "</span>";
+  }).join("");
+
+  // Диаграмма Ганта: между отрезками бывают паузы, когда процессор простаивает
+  const segs = [];
+  let prev = 0;
+  data.gantt.forEach(function (g) {
+    if (g.start > prev) segs.push({ idle: true, start: prev, end: g.start });
+    segs.push({ pid: g.pid, start: g.start, end: g.end });
+    prev = g.end;
+  });
+
+  const bar = segs.map(function (s) {
+    const bg = s.idle ? "#E3E6EB" : color[s.pid];
+    return '<div class="seg" style="flex:' + (s.end - s.start) + ' 1 0;background:' + bg + '">' + (s.idle ? "" : esc(s.pid)) + "</div>";
+  }).join("");
+
+  const ticks = segs.map(function (s, i) {
+    const last = i === segs.length - 1;
+    return '<div class="tick" style="flex:' + (s.end - s.start) + ' 1 0"><span>' + s.start + "</span>" + (last ? "<span>" + s.end + "</span>" : "") + "</div>";
+  }).join("");
+
+  document.getElementById("gantt").innerHTML =
+    '<div style="min-width:' + Math.max(560, prev * 28) + 'px">' +
+    '<div style="display:flex;border-radius:8px;overflow:hidden">' + bar + "</div>" +
+    '<div style="display:flex">' + ticks + "</div></div>";
+
+  // Таблица метрик
+  document.getElementById("metrics").innerHTML = data.metrics.map(function (m) {
+    return "<tr><td><span style='display:inline-flex;align-items:center;gap:8px;font-weight:600'><span class='dot' style='width:10px;height:10px;background:" + color[m.pid] + "'></span>" + esc(m.pid) + "</span></td>" +
+      "<td>" + m.arrival + "</td><td>" + m.burst + "</td><td>" + m.first + "</td><td>" + m.completion +
+      "</td><td>" + m.turnaround + "</td><td>" + m.waiting + "</td><td>" + m.response + "</td></tr>";
+  }).join("");
+}
+
+document.getElementById("addBtn").addEventListener("click", function () {
+  addRow("P" + (rowsEl.children.length + 1), 0, 1);
+});
+document.getElementById("calcBtn").addEventListener("click", calculate);
+document.getElementById("exampleBtn").addEventListener("click", function () { loadExample(); calculate(); });
+document.getElementById("resetBtn").addEventListener("click", resetAll);
+
+// При открытии страницы сразу показываем пример
+loadExample();
+calculate();
+</script>
+</body>
+</html>
